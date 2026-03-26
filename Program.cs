@@ -1,33 +1,30 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Npgsql;
-
 var builder = WebApplication.CreateBuilder(args);
 
+// 1. Desative os logs para ganhar performance (conforme a dica da Rinha)
 builder.Logging.ClearProviders();
 
-builder.Services.AddNpgsqlDataSource(
-    builder.Configuration.GetConnectionString("DefaultConnection")
-);
+// 2. Monte a String de Conexão usando as variáveis do Docker
+var host = Environment.GetEnvironmentVariable("DB_HOST") ?? "localhost";
+var user = Environment.GetEnvironmentVariable("DB_USER") ?? "admin";
+var pass = Environment.GetEnvironmentVariable("DB_PASS") ?? "123";
+var dbName = Environment.GetEnvironmentVariable("DB_NAME") ?? "rinha";
+
+var connectionString = $"Host={host};Username={user};Password={pass};Database={dbName};Pooling=true;Minimum Pool Size=10;Maximum Pool Size=50";
+
+builder.Services.AddNpgsqlDataSource(connectionString);
+
+// builder.Logging.ClearProviders();
 
 var app = builder.Build();
 
-app.MapPost("/reservas", async (ReservaRequest request, NpgsqlDataSource db) =>
-{
-    await using var connection = db.OpenConnection();
-    var command = new NpgsqlCommand(@"
-        UPDATE eventos SET ingressos_disponiveis = ingressos_disponiveis - 1 
-        WHERE id = @EventoId AND ingressos_disponiveis > 0 RETURNING ingressos_disponiveis;
-   ", connection);
-    command.Parameters.AddWithValue("EventoId", request.EventoId);
-    var result = await command.ExecuteScalarAsync();
-    return result == null ? Results.UnprocessableEntity() : Results.Created();
-});
 
 app.MapGet("/eventos", async (NpgsqlDataSource db) =>
 {
     await using var connection = db.OpenConnection();
-    var command = new NpgsqlCommand("SELECT * FROM eventos;", connection);
-    var reader = await command.ExecuteReaderAsync();
+    await using var command = new NpgsqlCommand("SELECT * FROM eventos;", connection);
+    await using var reader = await command.ExecuteReaderAsync();
     var eventos = new List<Object>();
     while (await reader.ReadAsync())
     {
@@ -43,7 +40,27 @@ app.MapGet("/eventos", async (NpgsqlDataSource db) =>
     return Results.Ok(eventos);
 });
 
+app.MapPost("/reservas", async (ReservaRequest request, NpgsqlDataSource db) =>
+{
+    await using var connection = await db.OpenConnectionAsync();
+    await using var command = new NpgsqlCommand(@"
+        WITH atualizacao AS (
+            UPDATE eventos 
+            SET ingressos_disponiveis = ingressos_disponiveis - 1 
+            WHERE id = @EventoId AND ingressos_disponiveis > 0 
+            RETURNING id
+        )
+        INSERT INTO reservas (evento_id, usuario_id)
+        SELECT id, @UsuarioId FROM atualizacao 
+        RETURNING evento_id;
+    ", connection);
+    command.Parameters.AddWithValue("EventoId", request.evento_id);
+    command.Parameters.AddWithValue("UsuarioId", request.usuario_id);
+    var result = await command.ExecuteScalarAsync();
+    return result == null ? Results.UnprocessableEntity() : Results.StatusCode(201);
+});
+
 app.Run("http://0.0.0.0:8080");
 
 
-public record ReservaRequest(int EventoId, int UsuarioId);
+public record ReservaRequest(long evento_id, long usuario_id);
