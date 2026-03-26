@@ -1,5 +1,7 @@
 # 🎟️ Rinha de Dev - Ticket Reservation API
 
+**Competition Link**: https://github.com/Luis-Moura/rinha-de-dev-v1
+
 A high-performance, low-footprint Web API built with **.NET 9** for the "Rinha de Dev" challenge. The goal: handle massive concurrent ticket reservations on extremely restricted hardware (0.5 CPU / 256MB RAM) without a single overbooking.
 
 ## ⚡ Performance Highlights (The ".NET is Heavy" Myth Buster)
