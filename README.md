@@ -28,7 +28,7 @@ A high-performance, low-footprint Web API built with **.NET 9** for the "Rinha d
    git clone https://github.com/Juawo/rinha-dev-v1-dotnet.git
    cd <repo-folder>
    docker compose up --build
-Test it: Use any load testing tool (like k6) pointing to POST http://localhost:8080/reservas.
+Test it: Use any load testing tool (like k6) pointing to POST http://0.0.0.0:8080/reservas.
 
 📈 Monitoring
 To see the resource constraints in action:
